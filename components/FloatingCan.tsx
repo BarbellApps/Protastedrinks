@@ -14,23 +14,19 @@ export default function FloatingCan({
         x, y, rotate, width, height, opacity, zIndex, isReady
     } = handoff;
 
-    // Only render if we have valid measurements
+    // Only render if we have a valid snapshot
     if (!isReady) return null;
 
     return (
         <div
-            className="floating-can-overlay"
+            className="floating-can-overlay fixed top-0 left-0 pointer-events-none will-change-transform"
             style={{
-                position: "fixed",
-                top: 0,
-                left: 0,
                 width: `${width}px`,
                 height: `${height}px`,
                 transform: `translate3d(${x}px, ${y}px, 0) rotate(${rotate}deg)`,
                 opacity,
                 zIndex,
-                pointerEvents: "none",
-                willChange: "transform, opacity",
+                // Removed debug outline and background
             }}
         >
             <div className="relative w-full h-full">
@@ -38,6 +34,7 @@ export default function FloatingCan({
                     src={imageSrc}
                     alt="Floating Product Can"
                     fill
+                    sizes={`${width}px`}
                     style={{ objectFit: "contain" }}
                     priority
                 />

@@ -21,7 +21,7 @@ export interface HandoffCanResult {
 }
 
 /**
- * ROCK-SOLID Free-Fall Hook with Landing Bounce & Extreme Persistence.
+ * CLEAN & STABLE Free-Fall Hook.
  */
 export function useSectionHandoffCan(
     startEl: HTMLElement | null,
@@ -30,136 +30,113 @@ export function useSectionHandoffCan(
     const [scrollY, setScrollY] = useState(0);
     const [windowHeight, setWindowHeight] = useState(0);
 
-    // The "Locked" coordinate snapshot - persists until reset
     const snapshot = useRef<{ start: Rect; end: Rect } | null>(null);
     const [isMeasured, setIsMeasured] = useState(false);
-
-    // Track scroll
-    useEffect(() => {
-        const handleScroll = () => setScrollY(window.scrollY);
-        handleScroll();
-        window.addEventListener("scroll", handleScroll, { passive: true });
-        return () => window.removeEventListener("scroll", handleScroll);
-    }, []);
-
-    useEffect(() => {
-        setWindowHeight(window.innerHeight);
-        const handleResize = () => setWindowHeight(window.innerHeight);
-        window.addEventListener("resize", handleResize);
-        return () => window.removeEventListener("resize", handleResize);
-    }, []);
-
-    // ── TRIGGER CALCULATION ──
     const [triggerRange, setTriggerRange] = useState<{ start: number; end: number } | null>(null);
 
+    // 1. Monitor Scroll & Window
+    useEffect(() => {
+        const hS = () => setScrollY(window.scrollY);
+        const hR = () => setWindowHeight(window.innerHeight);
+        hS(); hR();
+        window.addEventListener("scroll", hS, { passive: true });
+        window.addEventListener("resize", hR);
+        return () => {
+            window.removeEventListener("scroll", hS);
+            window.removeEventListener("resize", hR);
+        };
+    }, []);
+
+    // 2. Calculate Trigger Range
     useEffect(() => {
         if (endEl) {
             const rE = endEl.getBoundingClientRect();
             const docTop = rE.top + window.scrollY;
-            // The target is at 18vh. It hits 18vh when scrollY = docTop - 0.18 * windowHeight
             const landingScroll = docTop - 0.18 * window.innerHeight;
+
             setTriggerRange({
-                start: landingScroll - 1000,
+                start: landingScroll - 1100,
                 end: landingScroll
             });
         }
     }, [endEl]);
 
-    // ── SNAPSHOT LATCHING ──
+    // 3. Snapshot Logic
     useEffect(() => {
         if (!triggerRange || !startEl || !endEl) return;
 
-        // Capture snapshot exactly at triggerStart
-        if (scrollY >= triggerRange.start && !snapshot.current) {
+        const isPastStart = scrollY >= triggerRange.start;
+        const isPastEnd = scrollY > triggerRange.end + 1200;
+
+        // CAPTURE
+        if (isPastStart && !isPastEnd && !snapshot.current) {
             const rS = startEl.getBoundingClientRect();
             const rE = endEl.getBoundingClientRect();
 
-            snapshot.current = {
-                start: {
-                    top: rS.top + window.scrollY,
-                    left: rS.left + window.scrollX,
-                    width: rS.width,
-                    height: rS.height,
-                },
-                end: {
-                    top: rE.top + window.scrollY,
-                    left: rE.left + window.scrollX,
-                    width: rE.width,
-                    height: rE.height,
-                }
-            };
-            setIsMeasured(true);
+            if (rS.width > 0 && rS.height > 0) {
+                snapshot.current = {
+                    start: {
+                        top: rS.top + window.scrollY,
+                        left: rS.left + window.scrollX,
+                        width: rS.width,
+                        height: rS.height,
+                    },
+                    end: {
+                        top: rE.top + window.scrollY,
+                        left: rE.left + window.scrollX,
+                        width: rE.width,
+                        height: rE.height,
+                    }
+                };
+                setIsMeasured(true);
+            }
         }
 
-        // Reset only if we scroll back UP significant distance
-        if (scrollY < triggerRange.start - 400 && snapshot.current) {
+        // RESET
+        if (scrollY < triggerRange.start - 600 && snapshot.current) {
             snapshot.current = null;
             setIsMeasured(false);
         }
     }, [scrollY, triggerRange, startEl, endEl]);
 
-    // ── RENDER ──
+    // 4. Render Calculations
     if (snapshot.current && triggerRange) {
         const { start, end } = snapshot.current;
         const { start: ts, end: te } = triggerRange;
 
-        // Progress calc
-        const rawProgress = (scrollY - ts) / (te - ts);
-        // Map p to be 0..1 for path, but allow > 1 for persistence/bounce
-        const p = Math.max(0, Math.min(2.5, rawProgress));
+        const rawP = (scrollY - ts) / (te - ts);
+        const p = Math.max(0, Math.min(3.0, rawP));
+        const active = rawP > -0.05 && rawP < 2.5;
 
-        /**
-         * PERSISTENCE: 
-         * Stay active until rawProgress reaches 2.5 (deep into the next sections).
-         * This prevents the can from disappearing while the user is still in the "How It Works" zone.
-         */
-        const overlayActive = rawProgress > -0.05 && rawProgress < 2.5;
-
-        // Physics: Gravity with landing clamp
         const fallP = Math.min(1.0, p);
         const g = 0.6 * fallP + 0.4 * (fallP * fallP);
 
-        // Docs base position
-        const xDoc = start.left + (end.left - start.left) * fallP;
-        let yDoc = start.top + (end.top - start.top) * g;
+        const xD = start.left + (end.left - start.left) * fallP;
+        let yD = start.top + (end.top - start.top) * g;
 
-        /**
-         * BOUNCE EFFECT:
-         * Triggered on impact (p >= 1.0).
-         * Damped oscillation for position and scale.
-         */
-        let scaleBounce = 1.0;
+        let sB = 1.0;
         if (p >= 1.0) {
-            const bounceP = p - 1.0;
-            // Position bounce (up/down)
-            const bounceOffset = Math.sin(bounceP * 50) * Math.exp(-bounceP * 12) * 22;
-            yDoc += bounceOffset;
-
-            // "Squish" bounce (scale)
-            scaleBounce = 1.0 + Math.sin(bounceP * 50 + Math.PI) * Math.exp(-bounceP * 12) * 0.06;
+            const bP = p - 1.0;
+            yD += Math.sin(bP * 50) * Math.exp(-bP * 12) * 22;
+            sB = 1.0 + Math.sin(bP * 50 + Math.PI) * Math.exp(-bP * 12) * 0.05;
         }
 
-        // Convert to viewport space
-        const x = xDoc - (typeof window !== "undefined" ? window.scrollX : 0);
-        const y = yDoc - scrollY;
+        const x = xD - (typeof window !== "undefined" ? window.scrollX : 0);
+        const y = yD - scrollY;
 
-        // Rotation: 2 spins + settle to 0
-        let rotate = fallP * 720;
+        let r = fallP * 720;
         if (fallP > 0.7) {
-            const settleP = (fallP - 0.7) / 0.3;
-            const easeOut = 1 - Math.pow(1 - settleP, 3);
-            rotate = (0.7 * 720) + (720 - (0.7 * 720)) * easeOut;
+            const sP = (fallP - 0.7) / 0.3;
+            r = (0.7 * 720) + (720 - (0.7 * 720)) * (1 - Math.pow(1 - sP, 3));
         }
-
-        // Dimensions
-        const width = (start.width + (end.width - start.width) * fallP) * scaleBounce;
-        const height = (start.height + (end.height - start.height) * fallP) * scaleBounce;
 
         return {
-            x, y, rotate, width, height,
-            opacity: overlayActive ? 1 : 0,
-            zIndex: 50,
-            overlayActive,
+            x, y, rotate: r,
+            width: (start.width + (end.width - start.width) * fallP) * sB,
+            height: (start.height + (end.height - start.height) * fallP) * sB,
+            opacity: active ? 1 : 0,
+            zIndex: 100,
+            overlayActive: active,
             isReady: isMeasured,
             progress: p
         };
