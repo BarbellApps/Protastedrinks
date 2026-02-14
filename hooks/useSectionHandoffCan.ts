@@ -21,8 +21,7 @@ export interface HandoffCanResult {
 }
 
 /**
- * ROCK-SOLID Free-Fall Hook.
- * Guarantees monotonic motion, zero jitter via one-way snapshots, and precise landing.
+ * ROCK-SOLID Free-Fall Hook with Landing Bounce & Extreme Persistence.
  */
 export function useSectionHandoffCan(
     startEl: HTMLElement | null,
@@ -34,7 +33,6 @@ export function useSectionHandoffCan(
     // The "Locked" coordinate snapshot - persists until reset
     const snapshot = useRef<{ start: Rect; end: Rect } | null>(null);
     const [isMeasured, setIsMeasured] = useState(false);
-    const [activeProgress, setActiveProgress] = useState(0);
 
     // Track scroll
     useEffect(() => {
@@ -54,13 +52,11 @@ export function useSectionHandoffCan(
     // ── TRIGGER CALCULATION ──
     const [triggerRange, setTriggerRange] = useState<{ start: number; end: number } | null>(null);
 
-    // Calculate a STABLE trigger range based on landing section
     useEffect(() => {
         if (endEl) {
             const rE = endEl.getBoundingClientRect();
             const docTop = rE.top + window.scrollY;
-            // Transition spans 1000px, ending precisely when landing section hits its viewport spot
-            // The landing target is at 18vh. So it hits 18vh when scrollY = docTop - 0.18 * windowHeight
+            // The target is at 18vh. It hits 18vh when scrollY = docTop - 0.18 * windowHeight
             const landingScroll = docTop - 0.18 * window.innerHeight;
             setTriggerRange({
                 start: landingScroll - 1000,
@@ -73,11 +69,7 @@ export function useSectionHandoffCan(
     useEffect(() => {
         if (!triggerRange || !startEl || !endEl) return;
 
-        // "Ready to capture" means we are approaching the start
-        const isApproaching = scrollY >= triggerRange.start - 500 && scrollY <= triggerRange.start;
-        const isInside = scrollY >= triggerRange.start && scrollY <= triggerRange.end + 500;
-
-        // CAPTURE: Exactly when crossing the start threshold
+        // Capture snapshot exactly at triggerStart
         if (scrollY >= triggerRange.start && !snapshot.current) {
             const rS = startEl.getBoundingClientRect();
             const rE = endEl.getBoundingClientRect();
@@ -99,8 +91,8 @@ export function useSectionHandoffCan(
             setIsMeasured(true);
         }
 
-        // RESET: Only if we scroll back UP far enough
-        if (scrollY < triggerRange.start - 200 && snapshot.current) {
+        // Reset only if we scroll back UP significant distance
+        if (scrollY < triggerRange.start - 400 && snapshot.current) {
             snapshot.current = null;
             setIsMeasured(false);
         }
@@ -113,36 +105,55 @@ export function useSectionHandoffCan(
 
         // Progress calc
         const rawProgress = (scrollY - ts) / (te - ts);
-        const p = Math.max(0, Math.min(1, rawProgress));
+        // Map p to be 0..1 for path, but allow > 1 for persistence/bounce
+        const p = Math.max(0, Math.min(2.5, rawProgress));
 
-        // Visibility: show slightly before and definitely through landing
-        const overlayActive = rawProgress > -0.05 && rawProgress < 1.1;
+        /**
+         * PERSISTENCE: 
+         * Stay active until rawProgress reaches 2.5 (deep into the next sections).
+         * This prevents the can from disappearing while the user is still in the "How It Works" zone.
+         */
+        const overlayActive = rawProgress > -0.05 && rawProgress < 2.5;
 
-        // Physics: Gravity with initial velocity matching scroll
-        // v0 = 1.0 (linear), a = 0.5 (parabolic)
-        const g = 0.6 * p + 0.4 * (p * p);
+        // Physics: Gravity with landing clamp
+        const fallP = Math.min(1.0, p);
+        const g = 0.6 * fallP + 0.4 * (fallP * fallP);
 
-        // Docs
-        const xDoc = start.left + (end.left - start.left) * p;
-        const yDoc = start.top + (end.top - start.top) * g;
+        // Docs base position
+        const xDoc = start.left + (end.left - start.left) * fallP;
+        let yDoc = start.top + (end.top - start.top) * g;
 
-        // Viewport
+        /**
+         * BOUNCE EFFECT:
+         * Triggered on impact (p >= 1.0).
+         * Damped oscillation for position and scale.
+         */
+        let scaleBounce = 1.0;
+        if (p >= 1.0) {
+            const bounceP = p - 1.0;
+            // Position bounce (up/down)
+            const bounceOffset = Math.sin(bounceP * 50) * Math.exp(-bounceP * 12) * 22;
+            yDoc += bounceOffset;
+
+            // "Squish" bounce (scale)
+            scaleBounce = 1.0 + Math.sin(bounceP * 50 + Math.PI) * Math.exp(-bounceP * 12) * 0.06;
+        }
+
+        // Convert to viewport space
         const x = xDoc - (typeof window !== "undefined" ? window.scrollX : 0);
         const y = yDoc - scrollY;
 
-        // Rotation: 2 full spins, then settle to 0
-        // We settle between progress 0.7 and 1.0
-        let rotate = p * 720;
-        if (p > 0.7) {
-            const settleP = (p - 0.7) / 0.3;
+        // Rotation: 2 spins + settle to 0
+        let rotate = fallP * 720;
+        if (fallP > 0.7) {
+            const settleP = (fallP - 0.7) / 0.3;
             const easeOut = 1 - Math.pow(1 - settleP, 3);
-            // We want to end at exactly 720 (effectively 0)
             rotate = (0.7 * 720) + (720 - (0.7 * 720)) * easeOut;
         }
 
-        // Scale
-        const width = start.width + (end.width - start.width) * p;
-        const height = start.height + (end.height - start.height) * p;
+        // Dimensions
+        const width = (start.width + (end.width - start.width) * fallP) * scaleBounce;
+        const height = (start.height + (end.height - start.height) * fallP) * scaleBounce;
 
         return {
             x, y, rotate, width, height,
