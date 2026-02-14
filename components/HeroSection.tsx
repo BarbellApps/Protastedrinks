@@ -28,10 +28,10 @@ export default function HeroSection() {
                 {/* Scroll Indicator */}
                 <motion.div
                     style={{ opacity: scrollIndicatorOpacity }}
-                    className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-foreground font-medium"
+                    className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-coffee font-medium z-20"
                 >
-                    <span className="text-sm uppercase tracking-widest text-background">Scroll to Explore</span>
-                    <ChevronDown className="animate-bounce w-6 h-6 text-background" />
+                    <span className="text-base font-bold uppercase tracking-[0.2em] text-coffee/80 animate-pulse">Scroll to Explore</span>
+                    <ChevronDown className="animate-bounce w-8 h-8 text-coffee" />
                 </motion.div>
             </div>
         </section>

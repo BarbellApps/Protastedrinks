@@ -3,22 +3,43 @@
 import ProductCarousel from "./ProductCarousel";
 import FinalCTA from "./FinalCTA";
 
-export default function InfoSections() {
+export default function InfoSections({
+    setStartRef,
+    setLandingRef,
+    overlayActive
+}: {
+    setStartRef: (node: HTMLDivElement | null) => void;
+    setLandingRef: (node: HTMLDivElement | null) => void;
+    overlayActive: boolean;
+}) {
     return (
         <div className="flex flex-col gap-0 pb-32 relative">
             {/* Section 1: Choose Your Drink - Interactive Carousel */}
             {/* Height needs to be large enough to scroll through. 
                 The Component itself defines height, but the container should flow. */}
             <div id="products">
-                <ProductCarousel />
+                <ProductCarousel setStartRef={setStartRef} overlayActive={overlayActive} />
             </div>
 
             {/* Section 2: How It Works */}
-            <section id="how-it-works" className="min-h-[80vh] flex flex-col justify-center items-end px-6 md:px-20 text-right">
+            <section id="how-it-works" className="relative min-h-[80vh] flex flex-col justify-center items-end px-6 md:px-20 text-right">
                 <div className="max-w-xl">
                     <h2 className="text-5xl md:text-7xl font-heading font-bold text-foreground mb-6">
                         HOW IT WORKS
                     </h2>
+
+                    {/* Landing Target for Free-Fall Can - Positioned at blue marker */}
+                    <div
+                        ref={setLandingRef}
+                        data-landing-target="true"
+                        className="absolute left-[8vw] top-[18vh] w-[240px] h-[560px] pointer-events-none"
+                        style={{
+                            // Debug: uncomment to see the landing zone
+                            // border: '2px dashed blue',
+                            // backgroundColor: 'rgba(0, 0, 255, 0.1)'
+                        }}
+                    />
+
                     <div className="space-y-8">
                         <div>
                             <h3 className="text-2xl font-bold text-coffee mb-2">01. CHOOSE PRODUCT</h3>

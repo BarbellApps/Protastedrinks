@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useMotionValueEvent, MotionValue } from "framer-motion";
+import { useMotionValueEvent, MotionValue, AnimatePresence } from "framer-motion";
+import LoadingScreen from "./LoadingScreen";
+import { useLoading } from "@/components/LoadingContext";
 
 const FRAME_COUNT = 240;
 const IMAGES_DIR = "/images/sequence/";
@@ -14,14 +16,18 @@ export default function HeroCanvas({ scrollYProgress }: HeroCanvasProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [images, setImages] = useState<HTMLImageElement[]>([]);
     const [imagesLoaded, setImagesLoaded] = useState(false);
+    const [loadingProgress, setLoadingProgress] = useState(0);
+    const { setIsLoading } = useLoading();
+
+    // Set initial loading state
+    useEffect(() => {
+        setIsLoading(true);
+    }, [setIsLoading]);
 
     // Load images
     useEffect(() => {
         const imgArray: HTMLImageElement[] = [];
-
-        // We can't wait for all images to load before showing anything, 
-        // but for smooth scroll we ideally want them locally.
-        // We'll load them and trigger re-render.
+        let loadedCount = 0;
 
         const loadImages = async () => {
             const promises = [];
@@ -32,15 +38,29 @@ export default function HeroCanvas({ scrollYProgress }: HeroCanvasProps) {
                 imgArray[i - 1] = img;
 
                 const promise = new Promise((resolve) => {
-                    img.onload = () => resolve(true);
-                    img.onerror = () => resolve(false);
+                    img.onload = () => {
+                        loadedCount++;
+                        setLoadingProgress((loadedCount / FRAME_COUNT) * 100);
+                        resolve(true);
+                    };
+                    img.onerror = () => {
+                        // Even if it fails, we count it as "processed" so loading finishes
+                        loadedCount++;
+                        setLoadingProgress((loadedCount / FRAME_COUNT) * 100);
+                        resolve(false);
+                    };
                 });
                 promises.push(promise);
             }
 
             await Promise.all(promises);
             setImages(imgArray);
-            setImagesLoaded(true);
+
+            // Add a small delay to let the user see the 100% state
+            setTimeout(() => {
+                setImagesLoaded(true);
+                setIsLoading(false);
+            }, 500);
         };
 
         loadImages();
@@ -130,15 +150,22 @@ export default function HeroCanvas({ scrollYProgress }: HeroCanvasProps) {
 
     return (
         <div className="absolute inset-0 w-full h-full">
-            {!imagesLoaded && (
-                <div className="absolute inset-0 flex items-center justify-center text-coffee font-heading text-2xl animate-pulse z-10">
-                    Loading Experience...
-                </div>
-            )}
+            <AnimatePresence mode="wait">
+                {!imagesLoaded && (
+                    <LoadingScreen key="loader" progress={loadingProgress} />
+                )}
+            </AnimatePresence>
+
+            {/* 
+               We only show the canvas when images are loaded to avoid flashing empty canvas. 
+               However, to keep the layout stable, we can keep it mounted but hidden or just performant.
+               Actually, we can render it behind the loader so it's ready.
+            */}
             <canvas
                 ref={canvasRef}
-                className="block w-full h-full object-cover"
+                className={`block w-full h-full object-cover transition-opacity duration-500 ${imagesLoaded ? "opacity-100" : "opacity-0"}`}
             />
         </div>
     );
 }
+

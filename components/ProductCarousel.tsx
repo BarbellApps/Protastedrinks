@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useEffect } from "react";
-import { motion, useScroll, useMotionValueEvent, AnimatePresence } from "framer-motion";
+import { motion, useScroll, useMotionValueEvent, AnimatePresence, useTransform, MotionValue } from "framer-motion";
 import Image from "next/image";
 
 // Edition Data
@@ -81,7 +81,12 @@ const MOBILE_ARC_POSITIONS = [
     { x: 220, y: 160, rotate: 40, scale: 0.65, opacity: 0.2, zIndex: 10 },
 ];
 
-export default function ProductCarousel() {
+interface ProductCarouselProps {
+    setStartRef: (node: HTMLDivElement | null) => void;
+    overlayActive: boolean;
+}
+
+export default function ProductCarousel({ setStartRef, overlayActive }: ProductCarouselProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const [currentIndex, setCurrentIndex] = useState(0);
     const [isMobile, setIsMobile] = useState(false);
@@ -113,6 +118,15 @@ export default function ProductCarousel() {
         }
     });
 
+    // Drop Animation for the last item ("Green Edition")
+    // REMOVED: dropY, dropX, dropRotate to keep the can fixed ("sticky") until the next section takes over.
+    // The visual "drop" will be handled entirely by the ProductShowcase component starting late.
+
+    // Fade out at the very end to avoid double-rendering when Showcase takes over
+    // Fade out at the very end to avoid double-rendering when Showcase takes over
+    // REMOVED: dropOpacity is no longer needed here as FloatingCan handles the transition.
+    // const dropOpacity = useTransform(scrollYProgress, [0.98, 1], [1, 0]);
+
     const currentEdition = EDITIONS[currentIndex];
     const itemPositions = isMobile ? MOBILE_ARC_POSITIONS : DESKTOP_ARC_POSITIONS;
 
@@ -122,15 +136,47 @@ export default function ProductCarousel() {
         const offset = slotIndex;
         let editionIndex = (currentIndex + offset) % EDITIONS.length;
         if (editionIndex < 0) editionIndex += EDITIONS.length;
+
+        // Apply drop animation only if it's the active item (slot 0) AND it's the Green Edition (last in list, or just use currentIndex check)
+        // Actually, we want the *visual* center item to drop.
+        let finalY: number | MotionValue<number> = pos.y;
+        let finalOpacity: number | MotionValue<number> = pos.opacity;
+
+        if (slotIndex === 0) {
+            // We are in the center slot.
+            // If we are at the very end of the scroll, this item should drop.
+            // However, motion values are hooks, we can't conditionally apply them easily in a map if they are different types.
+            // But Framer Motion 'style' prop accepts MotionValues.
+            // We'll pass the motion value derived above.
+            // BUT 'pos.y' is a number. We need to combine them?
+            // Easiest is to add a separate transform to the container div or use the value directly if supported.
+            // Let's use the `dropY` motion value we created, but only effect it if we are indeed at the last index.
+            // Since `dropY` is only non-zero at the end, we can add it to all? No, that would drop everything.
+            // We only want to drop if `currentIndex === EDITIONS.length - 1` (The Green Edition).
+
+            if (currentIndex === EDITIONS.length - 1) {
+                // We are displaying the last item.
+                // We can't mathematically add MotionValue to number easily in this map without `useTransform` composition which breaks rules of hooks if done here.
+                // Strategy: Pass dropping state or value to the component and handle style there?
+                // Or: Since this is the exit animation, we can just make `dropY` active for *whatever* is in slot 0 when scroll is > 0.9.
+                // Yes! Because at scroll > 0.9, the Green Edition IS in slot 0.
+                // So we just say: Slot 0 always gets `y + dropY`.
+            }
+        }
+
         return {
             ...EDITIONS[editionIndex],
             key: EDITIONS[editionIndex].id,
-            position: pos
+            position: pos,
+            isCenter: slotIndex === 0
         };
     });
 
     return (
-        <section ref={containerRef} className="relative h-[500vh] z-10 bg-white">
+        <section
+            ref={containerRef}
+            className="relative h-[500vh] z-10 bg-white"
+        >
             <div className="sticky top-0 h-screen w-full overflow-hidden flex flex-col md:flex-row shadow-2xl">
 
                 {/* Backgrounds 
@@ -197,8 +243,20 @@ export default function ProductCarousel() {
                                     transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
                                     className="absolute w-[140px] md:w-[280px] drop-shadow-2xl will-change-transform"
                                 >
-                                    {/* Fixed height container */}
-                                    <div className="relative w-full h-[300px] md:h-[500px] flex items-center justify-center">
+                                    {/* Fixed height container - Apply Drop here */}
+                                    <motion.div
+                                        ref={(el) => {
+                                            if (item.id === "green" && item.isCenter) {
+                                                setStartRef(el);
+                                            }
+                                        }}
+                                        style={{
+                                            // Hide ALL carousel items when overlay is active
+                                            opacity: overlayActive ? 0 : 1,
+                                            visibility: overlayActive ? 'hidden' : 'visible'
+                                        }}
+                                        className="relative w-full h-[300px] md:h-[500px] flex items-center justify-center"
+                                    >
                                         <Image
                                             src={item.image}
                                             alt={item.name}
@@ -207,7 +265,7 @@ export default function ProductCarousel() {
                                             className="w-full h-full object-contain"
                                             priority={i === 0}
                                         />
-                                    </div>
+                                    </motion.div>
                                 </motion.div>
                             ))}
                         </AnimatePresence>

@@ -1,14 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Link from "next/link"; // Changed from 'next/link' just to be safe, standard is 'next/link'
+import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X } from "lucide-react"; // I need to install lucide-react or use svg. I'll use SVG to avoid extra dep if not installed.
-
-// Using SVG icons to avoid dependency if not needed, but cleaner to use lucide-react if present.
-// I'll stick to SVG for zero-dependency bloat unless I install lucide-react. 
-// Wait, I should probably install lucide-react for standard icons.
-// I'll use simple SVGs for now to be fast.
+import { Menu, X } from "lucide-react";
+import { useLoading } from "@/components/LoadingContext"; // Import context hook
 
 const MenuIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" x2="20" y1="12" y2="12" /><line x1="4" x2="20" y1="6" y2="6" /><line x1="4" x2="20" y1="18" y2="18" /></svg>
@@ -21,6 +17,7 @@ const XIcon = () => (
 export default function Navbar() {
     const [scrolled, setScrolled] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+    const { isLoading } = useLoading(); // Get global loading state
 
     useEffect(() => {
         const handleScroll = () => {
@@ -40,8 +37,16 @@ export default function Navbar() {
 
     const textColor = scrolled ? "text-coffee" : "text-background"; // Cream text on hero
 
+    // Hide navbar if loading
+    if (isLoading) {
+        return null;
+    }
+
     return (
-        <nav
+        <motion.nav
+            initial={{ y: -100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ duration: 0.8, delay: 0.8, ease: "easeOut" }}
             className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled
                 ? "bg-white/90 backdrop-blur-md shadow-sm py-4"
                 : "bg-coffee/20 backdrop-blur-md border-b border-white/10 py-6" // Light brown glass
@@ -115,6 +120,6 @@ export default function Navbar() {
                     </motion.div>
                 )}
             </AnimatePresence>
-        </nav>
+        </motion.nav>
     );
 }
