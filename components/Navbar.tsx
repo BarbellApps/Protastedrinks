@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X } from "lucide-react";
 import { useLoading } from "@/components/LoadingContext"; // Import context hook
@@ -54,8 +55,15 @@ export default function Navbar() {
         >
             <div className="container mx-auto px-6 flex items-center justify-between">
                 {/* Logo */}
-                <Link href="/" className={`font-heading text-2xl md:text-3xl tracking-wide uppercase font-bold transition-colors ${textColor}`}>
-                    Drankenreclame.nl
+                <Link href="/" className="transition-opacity hover:opacity-80">
+                    <Image
+                        src="/images/Protaste Logo.png"
+                        alt="Protaste Drinks"
+                        width={180}
+                        height={50}
+                        className="h-[72px] md:h-[80px] w-auto object-contain"
+                        priority
+                    />
                 </Link>
 
                 {/* Desktop Menu */}

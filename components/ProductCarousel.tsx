@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef, useState, useEffect } from "react";
-import { motion, useScroll, useMotionValueEvent, AnimatePresence, useTransform, MotionValue } from "framer-motion";
+import { useRef, useState, useEffect, useCallback } from "react";
+import { motion, useScroll, useMotionValueEvent, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 
 // Edition Data
@@ -66,28 +66,30 @@ const EDITIONS = [
 
 const DESKTOP_ARC_POSITIONS = [
     { x: 0, y: 0, rotate: 0, scale: 1.4, opacity: 1, zIndex: 50 },
-    { x: 220, y: -80, rotate: 15, scale: 1.1, opacity: 0.8, zIndex: 40 },
-    { x: 420, y: -40, rotate: 30, scale: 0.9, opacity: 0.6, zIndex: 30 },
-    { x: 580, y: 60, rotate: 45, scale: 0.75, opacity: 0.4, zIndex: 20 },
+    { x: 220, y: -80, rotate: 12, scale: 1.1, opacity: 0.85, zIndex: 40 },
+    { x: 400, y: -50, rotate: 22, scale: 0.9, opacity: 0.65, zIndex: 35 },
+    { x: 550, y: 30, rotate: 32, scale: 0.75, opacity: 0.50, zIndex: 30 },
+    { x: 660, y: 140, rotate: 40, scale: 0.62, opacity: 0.35, zIndex: 25 },
+    { x: 730, y: 270, rotate: 48, scale: 0.52, opacity: 0.22, zIndex: 20 },
+    { x: 760, y: 410, rotate: 54, scale: 0.44, opacity: 0.12, zIndex: 15 },
 ];
 
 const MOBILE_ARC_POSITIONS = [
     { x: 0, y: 80, rotate: 0, scale: 1.15, opacity: 1, zIndex: 50 },
     { x: 70, y: 60, rotate: 10, scale: 0.95, opacity: 0.8, zIndex: 40 },
-    { x: 130, y: 80, rotate: 20, scale: 0.85, opacity: 0.6, zIndex: 30 },
-    { x: 180, y: 120, rotate: 30, scale: 0.75, opacity: 0.4, zIndex: 20 },
-    { x: 220, y: 160, rotate: 40, scale: 0.65, opacity: 0.2, zIndex: 10 },
+    { x: 130, y: 80, rotate: 18, scale: 0.85, opacity: 0.6, zIndex: 30 },
+    { x: 175, y: 120, rotate: 26, scale: 0.75, opacity: 0.4, zIndex: 20 },
+    { x: 210, y: 170, rotate: 34, scale: 0.65, opacity: 0.25, zIndex: 15 },
+    { x: 235, y: 230, rotate: 40, scale: 0.55, opacity: 0.12, zIndex: 10 },
 ];
 
-interface ProductCarouselProps {
-    setStartRef: (node: HTMLElement | null) => void;
-    overlayActive: boolean;
-}
-
-export default function ProductCarousel({ setStartRef, overlayActive }: ProductCarouselProps) {
+export default function ProductCarousel() {
     const containerRef = useRef<HTMLDivElement>(null);
     const [currentIndex, setCurrentIndex] = useState(0);
     const [isMobile, setIsMobile] = useState(false);
+    const [isDragging, setIsDragging] = useState(false);
+    const dragStartX = useRef(0);
+    const dragStartY = useRef(0);
 
     useEffect(() => {
         if (typeof window !== "undefined") {
@@ -113,6 +115,46 @@ export default function ProductCarousel({ setStartRef, overlayActive }: ProductC
         }
     });
 
+    // Navigate to a specific product index directly (no page scroll)
+    const goToIndex = useCallback((targetIndex: number) => {
+        const clampedIndex = Math.max(0, Math.min(EDITIONS.length - 1, targetIndex));
+        setCurrentIndex(clampedIndex);
+    }, []);
+
+    const goNext = useCallback(() => {
+        goToIndex(currentIndex + 1);
+    }, [currentIndex, goToIndex]);
+
+    const goPrev = useCallback(() => {
+        goToIndex(currentIndex - 1);
+    }, [currentIndex, goToIndex]);
+
+    // Mouse drag handlers
+    const handleMouseDown = useCallback((e: React.MouseEvent) => {
+        setIsDragging(true);
+        dragStartX.current = e.clientX;
+        dragStartY.current = e.clientY;
+    }, []);
+
+    const handleMouseUp = useCallback((e: React.MouseEvent) => {
+        if (!isDragging) return;
+        setIsDragging(false);
+        const deltaX = e.clientX - dragStartX.current;
+        const deltaY = Math.abs(e.clientY - dragStartY.current);
+        // Only trigger if horizontal movement is dominant and exceeds threshold
+        if (Math.abs(deltaX) > 60 && Math.abs(deltaX) > deltaY) {
+            if (deltaX < 0) {
+                goNext(); // Dragged left → next
+            } else {
+                goPrev(); // Dragged right → prev
+            }
+        }
+    }, [isDragging, goNext, goPrev]);
+
+    const handleMouseLeave = useCallback(() => {
+        setIsDragging(false);
+    }, []);
+
     const currentEdition = EDITIONS[currentIndex];
     const itemPositions = isMobile ? MOBILE_ARC_POSITIONS : DESKTOP_ARC_POSITIONS;
 
@@ -134,7 +176,12 @@ export default function ProductCarousel({ setStartRef, overlayActive }: ProductC
             ref={containerRef}
             className="relative h-[500vh] z-10 bg-white"
         >
-            <div className="sticky top-0 h-screen w-full overflow-hidden flex flex-col md:flex-row shadow-2xl">
+            <div
+                className={`sticky top-0 h-screen w-full overflow-hidden flex flex-col md:flex-row shadow-2xl ${isDragging ? "cursor-grabbing" : ""}`}
+                onMouseDown={handleMouseDown}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseLeave}
+            >
                 <div
                     className="absolute left-0 top-0 w-full h-[55%] md:h-full md:w-[50%] transition-colors duration-700 ease-in-out z-0"
                     style={{ backgroundColor: currentEdition.color }}
@@ -192,51 +239,74 @@ export default function ProductCarousel({ setStartRef, overlayActive }: ProductC
                                     transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
                                     className="absolute w-[140px] md:w-[280px] drop-shadow-2xl will-change-transform"
                                 >
-                                    <motion.div
-                                        // RELAXED REF: Set ref whenever this is the Green Edition can.
-                                        // This ensures the ref is available as long as the Green can is visible in any slot.
-                                        ref={(el) => {
-                                            if (item.id === "green") {
-                                                setStartRef(el);
-                                            }
-                                        }}
-                                        style={{
-                                            opacity: overlayActive ? 0 : 1,
-                                            visibility: overlayActive ? 'hidden' : 'visible'
-                                        }}
-                                        className="relative w-full h-[300px] md:h-[500px] flex items-center justify-center"
-                                    >
+                                    <div className="relative w-full h-[300px] md:h-[500px] flex items-center justify-center">
                                         <Image
                                             src={item.image}
                                             alt={item.name}
                                             width={400}
                                             height={800}
-                                            className="w-full h-full object-contain"
+                                            className="w-full h-full object-contain pointer-events-none select-none"
                                             priority={i === 0}
+                                            draggable={false}
                                         />
-                                    </motion.div>
+                                    </div>
                                 </motion.div>
                             ))}
                         </AnimatePresence>
                     </div>
                 </div>
 
-                <div className="absolute z-30 bottom-8 left-1/2 -translate-x-1/2 md:bottom-12 md:left-20 md:translate-x-0 flex gap-2 md:gap-3 transition-all duration-300">
-                    {EDITIONS.map((_, idx) => (
-                        <div
-                            key={idx}
-                            style={{
-                                backgroundColor: isMobile
-                                    ? (idx === currentIndex ? currentEdition.color : `${currentEdition.color}40`)
-                                    : undefined
-                            }}
-                            className={`
-                                h-1.5 md:h-2 rounded-full transition-all duration-300 shadow-sm
-                                ${idx === currentIndex ? 'w-6 md:w-8' : 'w-1.5 md:w-2'}
-                                ${!isMobile ? (idx === currentIndex ? 'bg-white' : 'bg-white/40') : ''}
-                            `}
-                        />
-                    ))}
+                {/* Bottom Navigation: Arrows + Dots */}
+                <div className="absolute z-30 bottom-8 left-1/2 -translate-x-1/2 md:bottom-12 md:left-20 md:translate-x-0 flex items-center gap-4 md:gap-5">
+                    <button
+                        onClick={(e) => { e.stopPropagation(); goPrev(); }}
+                        disabled={currentIndex === 0}
+                        className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-all duration-300 shrink-0
+                            ${currentIndex === 0
+                                ? "opacity-30 cursor-default"
+                                : "bg-white/15 backdrop-blur-md border border-white/20 hover:bg-white/30 hover:scale-110 active:scale-95 shadow-lg cursor-pointer"
+                            }`}
+                        aria-label="Previous product"
+                    >
+                        <svg className="w-4 h-4 md:w-5 md:h-5 text-white drop-shadow-md" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+                        </svg>
+                    </button>
+
+                    <div className="flex items-center gap-2 md:gap-3">
+                        {EDITIONS.map((_, idx) => (
+                            <button
+                                key={idx}
+                                onClick={(e) => { e.stopPropagation(); goToIndex(idx); }}
+                                style={{
+                                    backgroundColor: isMobile
+                                        ? (idx === currentIndex ? currentEdition.color : `${currentEdition.color}40`)
+                                        : undefined
+                                }}
+                                className={`
+                                    h-1.5 md:h-2 rounded-full transition-all duration-300 shadow-sm cursor-pointer hover:scale-125
+                                    ${idx === currentIndex ? 'w-6 md:w-8' : 'w-1.5 md:w-2'}
+                                    ${!isMobile ? (idx === currentIndex ? 'bg-white' : 'bg-white/40 hover:bg-white/60') : ''}
+                                `}
+                                aria-label={`Go to product ${idx + 1}`}
+                            />
+                        ))}
+                    </div>
+
+                    <button
+                        onClick={(e) => { e.stopPropagation(); goNext(); }}
+                        disabled={currentIndex === EDITIONS.length - 1}
+                        className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-all duration-300 shrink-0
+                            ${currentIndex === EDITIONS.length - 1
+                                ? "opacity-30 cursor-default"
+                                : "bg-white/15 backdrop-blur-md border border-white/20 hover:bg-white/30 hover:scale-110 active:scale-95 shadow-lg cursor-pointer"
+                            }`}
+                        aria-label="Next product"
+                    >
+                        <svg className="w-4 h-4 md:w-5 md:h-5 text-white drop-shadow-md" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                        </svg>
+                    </button>
                 </div>
             </div>
         </section>
